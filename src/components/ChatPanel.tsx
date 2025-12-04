@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
+import type { Message, ChatPanelProps, ChatContent } from '../types';
 import './ChatPanel.less';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
-interface ChatPanelProps {
-  onDocumentAction?: (action: string, content?: string) => void;
+interface FeatureCard {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  iconColor: string;
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
@@ -18,6 +17,30 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const genAI = useRef<GoogleGenAI | null>(null);
+
+  const featureCards: FeatureCard[] = [
+    {
+      id: 'grammar',
+      title: '语病检查',
+      description: '检查全文是否有语病、标点符号错误和错别字',
+      icon: 'ABC',
+      iconColor: '#34c759',
+    },
+    {
+      id: 'summary',
+      title: '内容总结',
+      description: '提炼文档核心内容,结构化生成摘要',
+      icon: '📄',
+      iconColor: '#007aff',
+    },
+    {
+      id: 'mindmap',
+      title: '生成思维导图',
+      description: '梳理文档结构,生成逻辑清晰的思维导图',
+      icon: '🗺️',
+      iconColor: '#007aff',
+    },
+  ];
 
   useEffect(() => {
     // 初始化 Gemini API
@@ -36,17 +59,37 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+  const handleFeatureClick = (featureId: string) => {
+    const featureMessages: Record<string, string> = {
+      grammar: '请检查文档中的语病、标点符号错误和错别字',
+      summary: '请提炼文档的核心内容，生成结构化摘要',
+      mindmap: '请梳理文档结构，生成逻辑清晰的思维导图',
+    };
+
+    const message = featureMessages[featureId];
+    if (message) {
+      setInput(message);
+      // 自动发送
+      setTimeout(() => {
+        sendMessage(message);
+      }, 100);
+    }
+  };
+
+  const sendMessage = async (customMessage?: string) => {
+    const messageText = customMessage || input.trim();
+    if (!messageText || loading) return;
 
     const userMessage: Message = {
       role: 'user',
-      content: input.trim(),
+      content: messageText,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    if (!customMessage) {
+      setInput('');
+    }
     setLoading(true);
 
     try {
@@ -67,10 +110,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
       });
 
       // 使用 gemini-2.5-flash 模型生成内容
-      interface ChatContent {
-        role: 'user' | 'model';
-        parts: Array<{ text: string }>;
-      }
       const result = await genAI.current.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: chatHistory as ChatContent[],
@@ -112,35 +151,59 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
 
   return (
     <div className="chat-panel">
-      <div className="chat-header">
-        <h3>AI 助手</h3>
-        <p className="chat-subtitle">使用 Gemini 2.5 Flash 模型</p>
-      </div>
       <div className="chat-messages">
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            <p>开始与 AI 对话，询问文档相关问题或请求编辑文档内容</p>
-          </div>
-        )}
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`chat-message ${message.role === 'user' ? 'user' : 'assistant'}`}
-          >
-            <div className="message-content">{message.content}</div>
-            <div className="message-time">
-              {message.timestamp.toLocaleTimeString()}
+        {messages.length === 0 ? (
+          <div className="chat-welcome">
+            <h1 className="welcome-title">HI, 今天有什么可以帮忙?</h1>
+            <div className="feature-cards">
+              {featureCards.map((card) => (
+                <div
+                  key={card.id}
+                  className="feature-card"
+                  onClick={() => handleFeatureClick(card.id)}
+                >
+                  <div
+                    className="feature-icon"
+                    style={{ backgroundColor: `${card.iconColor}15` }}
+                  >
+                    <span
+                      className="feature-icon-text"
+                      style={{ color: card.iconColor }}
+                    >
+                      {card.icon}
+                    </span>
+                  </div>
+                  <div className="feature-content">
+                    <h3 className="feature-title">{card.title}</h3>
+                    <p className="feature-description">{card.description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-        {loading && (
-          <div className="chat-message assistant">
-            <div className="message-content">
-              <span className="typing-indicator">正在思考...</span>
-            </div>
-          </div>
+        ) : (
+          <>
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`chat-message ${message.role === 'user' ? 'user' : 'assistant'}`}
+              >
+                <div className="message-content">{message.content}</div>
+                <div className="message-time">
+                  {message.timestamp.toLocaleTimeString()}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="chat-message assistant">
+                <div className="message-content">
+                  <span className="typing-indicator">正在思考...</span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
-        <div ref={messagesEndRef} />
       </div>
       <div className="chat-input-container">
         <textarea
@@ -148,16 +211,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="输入消息... (按 Enter 发送，Shift+Enter 换行)"
+          placeholder="输入修改建议,优化当前内容"
           rows={3}
           disabled={loading}
         />
         <button
           className="chat-send-button"
-          onClick={sendMessage}
+          onClick={() => sendMessage()}
           disabled={loading || !input.trim()}
+          type="button"
         >
-          发送
+          <span className="send-icon">→</span>
         </button>
       </div>
     </div>

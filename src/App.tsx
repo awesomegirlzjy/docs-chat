@@ -1,16 +1,12 @@
 import { useRef } from 'react';
 import DocumentEditor from './components/DocumentEditor';
 import ChatPanel from './components/ChatPanel';
+import type { DocumentEditorElement } from './types';
 import './App.less';
 
 function App() {
   const documentEditorRef = useRef<HTMLDivElement>(null);
   const documentUrl = 'https://365.kdocs.cn/l/cjPdhRsoUXsY';
-
-  interface DocumentEditorElement extends HTMLDivElement {
-    getDocumentContent?: () => Promise<string>;
-    setDocumentContent?: (content: string) => Promise<void>;
-  }
 
   const handleDocumentAction = async (action: string, content?: string) => {
     if (!documentEditorRef.current) return;
@@ -39,14 +35,8 @@ function App() {
 
   return (
     <div className="app-container">
-      <div className="document-section">
-        <div className="document-header">
-          <h2>文档编辑</h2>
-          <p className="document-url">{documentUrl}</p>
-        </div>
-        <div className="document-content" ref={documentEditorRef}>
-          <DocumentEditor documentUrl={documentUrl} />
-        </div>
+      <div className="document-section" ref={documentEditorRef}>
+        <DocumentEditor documentUrl={documentUrl} />
       </div>
       <div className="chat-section">
         <ChatPanel onDocumentAction={handleDocumentAction} />

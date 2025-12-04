@@ -1,43 +1,35 @@
 import { useEffect, useRef } from 'react';
-import type { WebOfficeInstance } from '../types/wps';
+import type { DocumentEditorProps, DocumentEditorMethods } from '../types';
+import type { IWps } from '../assets/web-office-sdk-v1.1.20/index.d';
+import WebOfficeSDK from '../assets/web-office-sdk-v1.1.20/web-office-sdk-v1.1.20.es.js';
 import './DocumentEditor.less';
-
-interface DocumentEditorProps {
-  documentUrl: string;
-}
-
-interface DocumentEditorMethods {
-  getDocumentContent: () => Promise<string>;
-  setDocumentContent: (content: string) => Promise<void>;
-}
 
 const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentUrl }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const jssdkRef = useRef<WebOfficeInstance | null>(null);
+  const jssdkRef = useRef<IWps | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || !window.WebOfficeSDK) {
-      console.error('WebOfficeSDK not loaded or container not found');
+    if (!containerRef.current) {
+      console.error('Container not found');
       return;
     }
 
     // 初始化文档编辑器
-    const jssdk = window.WebOfficeSDK.config({
+    const jssdk = WebOfficeSDK.config({
       url: documentUrl,
       mount: containerRef.current,
-      mode: 'normal', // 编辑模式
     });
 
     jssdkRef.current = jssdk;
 
-    // 监听文档打开事件
-    jssdk.on('fileOpen', (data: unknown) => {
-      console.log('文档打开成功: ', data);
+    // 监听文档就绪事件
+    jssdk.on('ready', () => {
+      console.log('文档编辑器就绪');
     });
 
-    // 监听文档内容变化
-    jssdk.on('fileContentChange', (data: unknown) => {
-      console.log('文档内容变化: ', data);
+    // 监听文档保存事件
+    jssdk.on('save', (data: unknown) => {
+      console.log('文档保存: ', data);
     });
 
     // 清理函数
