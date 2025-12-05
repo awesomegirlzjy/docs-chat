@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Message, ChatPanelProps } from '../types';
 import './ChatPanel.less';
 
@@ -10,6 +12,13 @@ interface FeatureCard {
   icon: string;
   iconColor: string;
 }
+
+// 处理连续的换行符，将多个连续的换行符合并为单个硬换行（\n + 两个空格）
+// 这样在 Markdown 中只会产生一次换行，而不是段落分隔
+const normalizeLineBreaks = (text: string): string => {
+  // 将两个或更多的连续换行符合并为单个换行符 + 两个空格（硬换行）
+  return text.replace(/\n{2,}/g, '\n  ');
+};
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
   void onDocumentAction; // TODO: 待实现文档操作功能
@@ -141,14 +150,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
         const chunkText = chunk.text || '';
         fullText += chunkText;
 
-        // 更新最后一条 assistant 消息的内容（总是最后一条）
+        // 处理连续的换行符，然后更新最后一条 assistant 消息的内容
+        const normalizedText = normalizeLineBreaks(fullText);
         setMessages((prev) => {
           const newMessages = [...prev];
           const lastIndex = newMessages.length - 1;
           if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
             newMessages[lastIndex] = {
               ...newMessages[lastIndex],
-              content: fullText,
+              content: normalizedText,
             };
           }
           return newMessages;
@@ -229,8 +239,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
                 className={`chat-message ${message.role === 'user' ? 'user' : 'assistant'}`}
               >
                 <div className="message-content">
-                  {message.content || (
-                    <span className="typing-indicator">正在思考...</span>
+                  {message.content ? (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="typing-indicator">正在思考...</p>
                   )}
                 </div>
                 {message.content && (
