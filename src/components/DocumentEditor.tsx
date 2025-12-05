@@ -1,12 +1,19 @@
-import { useEffect, useRef } from 'react';
-import type { DocumentEditorProps, DocumentEditorMethods } from '../types';
+import {
+  useEffect,
+  useRef,
+  forwardRef,
+  useImperativeHandle,
+  useState,
+  useCallback,
+} from 'react';
+import type { DocumentEditorMethods } from '../types';
 import type { IWps } from '../assets/web-office-sdk-v1.1.20/index.d';
 import WebOfficeSDK from '../assets/web-office-sdk-v1.1.20/web-office-sdk-v1.1.20.es.js';
 import './DocumentEditor.less';
 
-const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentUrl }) => {
+const DocumentEditor = forwardRef<DocumentEditorMethods>((_, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const jssdkRef = useRef<IWps | null>(null);
+  const [jssdk, setJssdk] = useState<IWps | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) {
@@ -15,63 +22,63 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentUrl }) => {
     }
 
     // 初始化文档编辑器
-    const jssdk = WebOfficeSDK.config({
-      url: documentUrl,
+    const jssdkInstance = WebOfficeSDK.config({
+      url: 'https://365.kdocs.cn/l/cjPdhRsoUXsY',
       mount: containerRef.current,
     });
 
-    jssdkRef.current = jssdk;
+    setJssdk(jssdkInstance);
 
-    // 监听文档就绪事件
-    jssdk.on('ready', () => {
-      console.log('文档编辑器就绪');
-    });
-
-    // 监听文档保存事件
-    jssdk.on('save', (data: unknown) => {
-      console.log('文档保存: ', data);
+    jssdkInstance.on('fileOpen', (data) => {
+      console.log('打开文档成功: ', data);
     });
 
     // 清理函数
     return () => {
-      if (jssdkRef.current) {
-        jssdkRef.current.destroy?.();
+      if (jssdkInstance) {
+        jssdkInstance.destroy?.();
       }
     };
-  }, [documentUrl]);
-
-  // 获取文档内容的方法
-  const getDocumentContent = async (): Promise<string> => {
-    if (!jssdkRef.current) {
-      throw new Error('文档编辑器未初始化');
-    }
-    // 这里需要根据 WPS API 文档实现获取内容的方法
-    // 示例：return await jssdkRef.current.getContent();
-    return '';
-  };
-
-  // 设置文档内容的方法
-  const setDocumentContent = async (content: string): Promise<void> => {
-    if (!jssdkRef.current) {
-      throw new Error('文档编辑器未初始化');
-    }
-    // 这里需要根据 WPS API 文档实现设置内容的方法
-    // 示例：await jssdkRef.current.setContent(content);
-    console.log('设置文档内容:', content);
-  };
-
-  // 暴露方法给父组件
-  useEffect(() => {
-    if (containerRef.current) {
-      const methods: DocumentEditorMethods = {
-        getDocumentContent,
-        setDocumentContent,
-      };
-      Object.assign(containerRef.current, methods);
-    }
   }, []);
 
+  // 获取文档内容的方法
+  const getDocumentContent = useCallback(async (): Promise<string> => {
+    if (!jssdk) {
+      throw new Error('文档编辑器未初始化');
+    }
+    const app = jssdk.Application;
+    const range = await app.ActiveDocument.Content;
+    const text = await range.Text;
+    return text || '';
+  }, [jssdk]);
+
+  // 设置文档内容的方法
+  const setDocumentContent = useCallback(
+    async (content: string): Promise<void> => {
+      if (!jssdk) {
+        throw new Error('文档编辑器未初始化');
+      }
+      // 这里需要根据 WPS API 文档实现设置内容的方法
+      // 示例：await jssdk.setContent(content);
+      console.log('设置文档内容:', content);
+    },
+    [jssdk]
+  );
+
+  // 使用 useImperativeHandle 暴露方法给父组件
+  useImperativeHandle(
+    ref,
+    () => ({
+      getDocumentContent,
+      setDocumentContent,
+      jssdk,
+    }),
+    [jssdk, getDocumentContent, setDocumentContent]
+  );
+
   return <div ref={containerRef} className="document-editor" />;
-};
+});
+
+DocumentEditor.displayName = 'DocumentEditor';
 
 export default DocumentEditor;

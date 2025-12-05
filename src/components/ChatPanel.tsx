@@ -47,6 +47,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (apiKey && apiKey !== 'your_gemini_api_key_here') {
       genAI.current = new GoogleGenAI({ apiKey });
+      console.log('Gemini API 初始化成功');
     } else {
       console.warn(
         'Gemini API Key 未配置，请在 .env 文件中设置 VITE_GEMINI_API_KEY'
@@ -68,7 +69,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
 
     const message = featureMessages[featureId];
     if (message) {
-      setInput(message);
       // 自动发送
       setTimeout(() => {
         sendMessage(message);
@@ -87,9 +87,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    if (!customMessage) {
-      setInput('');
-    }
+    setInput('');
     setLoading(true);
 
     try {
@@ -125,10 +123,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // 如果对话中包含文档操作指令，触发回调
-      if (onDocumentAction && text.includes('文档')) {
-        onDocumentAction('update', text);
-      }
+      // TODO 如果对话中包含文档操作指令，触发回调
+      // if (onDocumentAction && text.includes('文档')) {
+      //   onDocumentAction('update', text);
+      // }
     } catch (error) {
       console.error('发送消息失败:', error);
       const errorMessage: Message = {
@@ -210,8 +208,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
           className="chat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="输入修改建议,优化当前内容"
+          onKeyDown={handleKeyPress}
+          placeholder={loading ? '正在思考...' : '输入修改建议，优化当前内容'}
           rows={3}
           disabled={loading}
         />

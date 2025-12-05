@@ -1,18 +1,11 @@
 // 应用相关的类型定义
+import type { IWps } from '../assets/web-office-sdk-v1.1.20/index.d';
 
 // 文档编辑器相关类型
-export interface DocumentEditorProps {
-  documentUrl: string;
-}
-
 export interface DocumentEditorMethods {
   getDocumentContent: () => Promise<string>;
   setDocumentContent: (content: string) => Promise<void>;
-}
-
-export interface DocumentEditorElement extends HTMLDivElement {
-  getDocumentContent?: () => Promise<string>;
-  setDocumentContent?: (content: string) => Promise<void>;
+  jssdk: IWps | null;
 }
 
 // 聊天面板相关类型
