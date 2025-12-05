@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import type { Message, ChatPanelProps, ChatContent } from '../types';
+import type { Message, ChatPanelProps } from '../types';
 import './ChatPanel.less';
 
 interface FeatureCard {
@@ -12,11 +12,15 @@ interface FeatureCard {
 }
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
+  void onDocumentAction; // TODO: 待实现文档操作功能
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const genAI = useRef<GoogleGenAI | null>(null);
+  const chatRef = useRef<Awaited<
+    ReturnType<GoogleGenAI['chats']['create']>
+  > | null>(null);
 
   const featureCards: FeatureCard[] = [
     {
@@ -76,6 +80,28 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
     }
   };
 
+  const getOrCreateChat = async () => {
+    if (!genAI.current) {
+      throw new Error('Gemini API 未初始化，请检查 API Key 配置');
+    }
+
+    // 如果 chat 实例不存在，或者消息为空（新对话），创建新的 chat 实例
+    if (!chatRef.current || messages.length === 0) {
+      // 构建对话历史（不包括当前要发送的消息）
+      const history = messages.map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }],
+      }));
+
+      chatRef.current = await genAI.current.chats.create({
+        model: 'gemini-2.5-flash',
+        history,
+      });
+    }
+
+    return chatRef.current;
+  };
+
   const sendMessage = async (customMessage?: string) => {
     const messageText = customMessage || input.trim();
     if (!messageText || loading) return;
@@ -90,42 +116,48 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
     setInput('');
     setLoading(true);
 
+    // 创建一个空的 assistant 消息，用于流式更新
+    const assistantMessage: Message = {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, assistantMessage]);
+
     try {
-      if (!genAI.current) {
-        throw new Error('Gemini API 未初始化，请检查 API Key 配置');
+      // 获取或创建 chat 实例
+      const chat = await getOrCreateChat();
+
+      // 使用 chat.sendMessageStream 发送消息，获取流式响应
+      const stream = await chat.sendMessageStream({
+        message: messageText,
+      });
+
+      let fullText = '';
+
+      // 遍历流式响应，逐步更新消息内容
+      for await (const chunk of stream) {
+        const chunkText = chunk.text || '';
+        fullText += chunkText;
+
+        // 更新最后一条 assistant 消息的内容（总是最后一条）
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const lastIndex = newMessages.length - 1;
+          if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: fullText,
+            };
+          }
+          return newMessages;
+        });
       }
 
-      // 构建对话历史
-      const chatHistory = messages.map((msg) => ({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }],
-      }));
-
-      // 添加当前用户消息
-      chatHistory.push({
-        role: 'user',
-        parts: [{ text: userMessage.content }],
-      });
-
-      // 使用 gemini-2.5-flash 模型生成内容
-      const result = await genAI.current.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: chatHistory as ChatContent[],
-      });
-
-      const text = result.text || '无法获取响应内容';
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: text,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
-
       // TODO 如果对话中包含文档操作指令，触发回调
-      // if (onDocumentAction && text.includes('文档')) {
-      //   onDocumentAction('update', text);
+      // if (onDocumentAction && fullText.includes('文档')) {
+      //   onDocumentAction('update', fullText);
       // }
     } catch (error) {
       console.error('发送消息失败:', error);
@@ -134,7 +166,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
         content: `错误: ${error instanceof Error ? error.message : '未知错误'}`,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const lastIndex = newMessages.length - 1;
+        // 替换最后一条消息为错误消息
+        if (lastIndex >= 0 && newMessages[lastIndex].role === 'assistant') {
+          newMessages[lastIndex] = errorMessage;
+        } else {
+          newMessages.push(errorMessage);
+        }
+        return newMessages;
+      });
     } finally {
       setLoading(false);
     }
@@ -186,19 +228,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onDocumentAction }) => {
                 key={index}
                 className={`chat-message ${message.role === 'user' ? 'user' : 'assistant'}`}
               >
-                <div className="message-content">{message.content}</div>
-                <div className="message-time">
-                  {message.timestamp.toLocaleTimeString()}
+                <div className="message-content">
+                  {message.content || (
+                    <span className="typing-indicator">正在思考...</span>
+                  )}
                 </div>
+                {message.content && (
+                  <div className="message-time">
+                    {message.timestamp.toLocaleTimeString()}
+                  </div>
+                )}
               </div>
             ))}
-            {loading && (
-              <div className="chat-message assistant">
-                <div className="message-content">
-                  <span className="typing-indicator">正在思考...</span>
-                </div>
-              </div>
-            )}
             <div ref={messagesEndRef} />
           </>
         )}
